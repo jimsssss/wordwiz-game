@@ -153,8 +153,21 @@ io.on('connection', (socket) => {
         gameRooms.set(roomCode, room);
         socket.join(roomCode);
         
+        // Get the actual server URL from request headers or environment
+        const req = socket.request;
+        const protocol = req.headers['x-forwarded-proto'] || (req.connection.encrypted ? 'https' : 'http');
+        const host = req.headers['x-forwarded-host'] || req.headers.host || `${LOCAL_IP}:${PORT}`;
+        const serverURL = `${protocol}://${host}`;
+        
         console.log(`Room created: ${roomCode} by ${socket.id}`);
-        socket.emit('roomCreated', { roomCode, serverIP: LOCAL_IP, serverPort: PORT });
+        console.log(`Server URL: ${serverURL}`);
+        
+        socket.emit('roomCreated', { 
+            roomCode, 
+            serverURL,
+            serverIP: LOCAL_IP, 
+            serverPort: PORT 
+        });
     });
 
     // Join existing room

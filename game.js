@@ -321,15 +321,15 @@ function attachEventListeners() {
 // Setup Socket.IO listeners
 function setupSocketListeners() {
     // Room created
-    socket.on('roomCreated', ({ roomCode, serverIP, serverPort }) => {
+    socket.on('roomCreated', ({ roomCode, serverURL, serverIP, serverPort }) => {
         GameState.roomCode = roomCode;
         GameState.isHost = true;
         
         displayRoomCode.textContent = roomCode;
         currentRoomCode.textContent = roomCode;
         
-        // Generate QR code using server's network IP
-        const url = `http://${serverIP}:${serverPort}?join=${roomCode}`;
+        // Generate QR code using the actual server URL (for deployed environments) or local IP
+        const url = serverURL ? `${serverURL}?join=${roomCode}` : `http://${serverIP}:${serverPort}?join=${roomCode}`;
         joinUrl.textContent = url;
         
         qrCode.innerHTML = '';
@@ -338,6 +338,8 @@ function setupSocketListeners() {
             width: 200,
             height: 200
         });
+        
+        console.log(`QR Code generated for: ${url}`);
         
         // Play lobby music
         playMusic(Music.lobby, true);
