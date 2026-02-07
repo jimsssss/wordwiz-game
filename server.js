@@ -32,14 +32,25 @@ const LOCAL_IP = getLocalIP();
 // Serve static files
 app.use(express.static(__dirname));
 
+// Middleware for JSON parsing
+app.use(express.json({ limit: '10mb' }));
+
 // Game rooms storage
 const gameRooms = new Map();
 
-// Generate random 4-digit room code
+// Feedback storage
+const feedbackStorage = [];
+const MAX_FEEDBACK_ITEMS = 1000; // Limit stored feedback items
+
+// Generate random 4-letter room code
 function generateRoomCode() {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let code;
     do {
-        code = Math.floor(1000 + Math.random() * 9000).toString();
+        code = '';
+        for (let i = 0; i < 4; i++) {
+            code += letters.charAt(Math.floor(Math.random() * letters.length));
+        }
     } while (gameRooms.has(code));
     return code;
 }
@@ -130,6 +141,355 @@ function findExampleWord(firstLetter, lastLetter) {
     return matches.length > 0 ? matches[Math.floor(Math.random() * matches.length)] : null;
 }
 
+// ========================================
+// FEEDBACK SYSTEM API ROUTES
+// ========================================
+
+// Submit feedback via REST API
+app.post('/api/feedback', (req, res) => {
+    try {
+        const feedbackData = {
+            id: Date.now() + Math.random(), // Unique ID
+            ...req.body,
+            serverTimestamp: new Date().toISOString(),
+            ip: req.ip || req.connection.remoteAddress || 'unknown'
+        };
+        
+        // Validate required fields
+        if (!feedbackData.message || feedbackData.message.trim().length === 0) {
+            return res.status(400).json({ error: 'Message is required' });
+        }
+        
+        // Store feedback
+        feedbackStorage.push(feedbackData);
+        
+        // Keep only recent feedback (prevent memory issues)
+        if (feedbackStorage.length > MAX_FEEDBACK_ITEMS) {
+            feedbackStorage.splice(0, feedbackStorage.length - MAX_FEEDBACK_ITEMS);
+        }
+        
+        // Log feedback submission
+        console.log(`📝 New feedback received:`, {
+            type: feedbackData.type,
+            rating: feedbackData.rating,
+            player: feedbackData.playerName,
+            room: feedbackData.roomCode,
+            message: feedbackData.message.substring(0, 100) + (feedbackData.message.length > 100 ? '...' : '')
+        });
+        
+        res.json({ 
+            success: true, 
+            message: 'Feedback submitted successfully',
+            id: feedbackData.id
+        });
+        
+    } catch (error) {
+        console.error('Error saving feedback:', error);
+        res.status(500).json({ error: 'Failed to submit feedback' });
+    }
+});
+
+// Get all feedback (admin endpoint)
+app.get('/api/feedback', (req, res) => {
+    try {
+        // Add simple admin protection
+        const adminKey = req.query.key || req.headers['x-admin-key'];
+        const expectedKey = process.env.ADMIN_KEY || 'wordwiz-admin-2025';
+        
+        if (adminKey !== expectedKey) {
+            return res.status(401).json({ 
+                error: 'Unauthorized - Invalid admin key',
+                hint: 'Add ?key=YOUR_ADMIN_KEY or set ADMIN_KEY environment variable'
+            });
+        }
+        
+        // Sort by timestamp (newest first)
+        const sortedFeedback = [...feedbackStorage].sort((a, b) => 
+            new Date(b.serverTimestamp) - new Date(a.serverTimestamp)
+        );
+        
+        // Add summary statistics
+        const stats = {
+            total: feedbackStorage.length,
+            byType: {},
+            averageRating: 0,
+            recentCount: 0
+        };
+        
+        feedbackStorage.forEach(fb => {
+            // Count by type
+            stats.byType[fb.type] = (stats.byType[fb.type] || 0) + 1;
+            
+            // Average rating (only count ratings > 0)
+            if (fb.rating && fb.rating > 0) {
+                stats.averageRating += fb.rating;
+            }
+            
+            // Count recent feedback (last 24 hours)
+            const feedbackTime = new Date(fb.serverTimestamp);
+            const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            if (feedbackTime > dayAgo) {
+                stats.recentCount++;
+            }
+        });
+        
+        // Calculate average rating
+        const ratedFeedback = feedbackStorage.filter(fb => fb.rating && fb.rating > 0);
+        stats.averageRating = ratedFeedback.length > 0 
+            ? (stats.averageRating / ratedFeedback.length).toFixed(2)
+            : 0;
+        
+        res.json({
+            success: true,
+            stats,
+            feedback: sortedFeedback,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('Error retrieving feedback:', error);
+        res.status(500).json({ error: 'Failed to retrieve feedback' });
+    }
+});
+
+// Delete feedback item (admin endpoint)
+app.delete('/api/feedback/:id', (req, res) => {
+    try {
+        const adminKey = req.query.key || req.headers['x-admin-key'];
+        const expectedKey = process.env.ADMIN_KEY || 'wordwiz-admin-2025';
+        
+        if (adminKey !== expectedKey) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        
+        const feedbackId = parseFloat(req.params.id);
+        const index = feedbackStorage.findIndex(fb => fb.id === feedbackId);
+        
+        if (index === -1) {
+            return res.status(404).json({ error: 'Feedback not found' });
+        }
+        
+        feedbackStorage.splice(index, 1);
+        console.log(`🗑️ Feedback deleted: ${feedbackId}`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Feedback deleted successfully' 
+        });
+        
+    } catch (error) {
+        console.error('Error deleting feedback:', error);
+        res.status(500).json({ error: 'Failed to delete feedback' });
+    }
+});
+
+// Simple admin dashboard
+app.get('/admin', (req, res) => {
+    const adminKey = req.query.key || 'wordwiz-admin-2025';
+    
+    res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>WordWiz Admin Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                color: #333;
+            }
+            .container { 
+                max-width: 1200px; 
+                margin: 0 auto; 
+                background: white; 
+                border-radius: 15px; 
+                padding: 30px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            }
+            h1 { color: #667eea; margin-bottom: 30px; }
+            .stats { 
+                display: grid; 
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+                gap: 20px; 
+                margin-bottom: 30px;
+            }
+            .stat-card { 
+                background: linear-gradient(135deg, #f8f9fa, #e9ecef); 
+                padding: 20px; 
+                border-radius: 10px; 
+                text-align: center;
+                border-left: 4px solid #667eea;
+            }
+            .stat-number { 
+                font-size: 2rem; 
+                font-weight: bold; 
+                color: #667eea; 
+                display: block;
+            }
+            .feedback-item { 
+                background: #f8f9fa; 
+                margin: 10px 0; 
+                padding: 20px; 
+                border-radius: 10px; 
+                border-left: 4px solid #28a745;
+            }
+            .feedback-item.bug { border-left-color: #dc3545; }
+            .feedback-item.suggestion { border-left-color: #007bff; }
+            .feedback-item.compliment { border-left-color: #28a745; }
+            .feedback-item.other { border-left-color: #6c757d; }
+            .feedback-meta { 
+                font-size: 0.9rem; 
+                color: #6c757d; 
+                margin-bottom: 10px;
+            }
+            .rating { color: #ffc107; }
+            .message { 
+                font-size: 1.1rem; 
+                line-height: 1.5; 
+                margin: 10px 0;
+                background: white;
+                padding: 15px;
+                border-radius: 8px;
+            }
+            .btn { 
+                background: #667eea; 
+                color: white; 
+                border: none; 
+                padding: 10px 20px; 
+                border-radius: 5px; 
+                cursor: pointer;
+                margin: 5px;
+            }
+            .btn:hover { background: #5a67d8; }
+            .btn.danger { background: #dc3545; }
+            .btn.danger:hover { background: #c82333; }
+            .loading { text-align: center; padding: 40px; color: #6c757d; }
+            .error { color: #dc3545; background: #f8d7da; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>📊 WordWiz Admin Dashboard</h1>
+            
+            <div class="stats" id="stats">
+                <div class="loading">Loading statistics...</div>
+            </div>
+            
+            <div style="margin: 20px 0;">
+                <button class="btn" onclick="loadFeedback()">🔄 Refresh Feedback</button>
+                <button class="btn danger" onclick="confirmDeleteAll()">🗑️ Clear All Feedback</button>
+            </div>
+            
+            <div id="feedback-list">
+                <div class="loading">Loading feedback...</div>
+            </div>
+        </div>
+
+        <script>
+            const ADMIN_KEY = '${adminKey}';
+            
+            async function loadFeedback() {
+                try {
+                    const response = await fetch('/api/feedback?key=' + ADMIN_KEY);
+                    if (!response.ok) {
+                        throw new Error('Failed to load feedback: ' + response.status);
+                    }
+                    
+                    const data = await response.json();
+                    displayStats(data.stats);
+                    displayFeedback(data.feedback);
+                } catch (error) {
+                    console.error('Error:', error);
+                    document.getElementById('feedback-list').innerHTML = 
+                        '<div class="error">Error loading feedback: ' + error.message + '</div>';
+                }
+            }
+            
+            function displayStats(stats) {
+                const statsHtml = \`
+                    <div class="stat-card">
+                        <span class="stat-number">\${stats.total}</span>
+                        <div>Total Feedback</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">\${stats.recentCount}</span>
+                        <div>Last 24 Hours</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">\${stats.averageRating}⭐</span>
+                        <div>Average Rating</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">\${Object.keys(stats.byType).length}</span>
+                        <div>Categories Used</div>
+                    </div>
+                \`;
+                document.getElementById('stats').innerHTML = statsHtml;
+            }
+            
+            function displayFeedback(feedback) {
+                if (feedback.length === 0) {
+                    document.getElementById('feedback-list').innerHTML = '<div class="loading">No feedback yet</div>';
+                    return;
+                }
+                
+                const feedbackHtml = feedback.map(fb => \`
+                    <div class="feedback-item \${fb.type}">
+                        <div class="feedback-meta">
+                            <strong>\${fb.type.toUpperCase()}</strong> • 
+                            <span class="rating">\${fb.rating ? '⭐'.repeat(fb.rating) : 'No rating'}</span> • 
+                            Player: <strong>\${fb.playerName || 'Anonymous'}</strong> • 
+                            Room: \${fb.roomCode || 'None'} • 
+                            \${new Date(fb.serverTimestamp).toLocaleString()}
+                            \${fb.email ? ' • Email: ' + fb.email : ''}
+                        </div>
+                        <div class="message">\${fb.message}</div>
+                        <button class="btn danger" onclick="deleteFeedback(\${fb.id})">Delete</button>
+                    </div>
+                \`).join('');
+                
+                document.getElementById('feedback-list').innerHTML = feedbackHtml;
+            }
+            
+            async function deleteFeedback(id) {
+                if (!confirm('Delete this feedback?')) return;
+                
+                try {
+                    const response = await fetch('/api/feedback/' + id + '?key=' + ADMIN_KEY, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        loadFeedback(); // Reload
+                    } else {
+                        alert('Failed to delete feedback');
+                    }
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            }
+            
+            function confirmDeleteAll() {
+                if (confirm('Are you sure you want to delete ALL feedback? This cannot be undone.')) {
+                    if (confirm('This will permanently delete all feedback. Are you absolutely sure?')) {
+                        // Implementation for bulk delete would go here
+                        alert('Bulk delete not implemented yet. Delete items individually.');
+                    }
+                }
+            }
+            
+            // Load feedback on page load
+            loadFeedback();
+        </script>
+    </body>
+    </html>
+    `);
+});
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
@@ -147,7 +507,7 @@ io.on('connection', (socket) => {
             currentChallenge: null,
             roundStartTime: null,
             roundAnswers: new Map(),
-            timerDuration: 30  // Default 30 seconds
+            timerDuration: 20  // Default 20 seconds
         };
         
         gameRooms.set(roomCode, room);
@@ -318,10 +678,8 @@ io.on('connection', (socket) => {
             });
             
             // Calculate score based on actual remaining time and multiplier
-            // Max base score = 1000, proportional to remaining time, then apply multiplier
-            const remainingSeconds = actualRemainingTime / 1000;
-            const maxScore = 1000;
-            const basePoints = Math.max(1, Math.round((remainingSeconds / room.timerDuration) * maxScore));
+            // Use the same formula as display: (4350 + remainingTime) / 1000 * (1000 / timerDuration)
+            const basePoints = Math.max(1, Math.round(((4350 + actualRemainingTime) / 1000) * (1000 / room.timerDuration)));
             const finalPoints = basePoints * multiplier;
             
             player.score += finalPoints;
@@ -380,6 +738,53 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Submit feedback via Socket.IO (fallback method)
+    socket.on('submitFeedback', (feedbackData) => {
+        try {
+            const enhancedFeedbackData = {
+                id: Date.now() + Math.random(), // Unique ID
+                ...feedbackData,
+                serverTimestamp: new Date().toISOString(),
+                ip: socket.request.connection.remoteAddress || 'unknown',
+                socketId: socket.id
+            };
+            
+            // Validate required fields
+            if (!enhancedFeedbackData.message || enhancedFeedbackData.message.trim().length === 0) {
+                socket.emit('feedbackError', { message: 'Message is required' });
+                return;
+            }
+            
+            // Store feedback
+            feedbackStorage.push(enhancedFeedbackData);
+            
+            // Keep only recent feedback
+            if (feedbackStorage.length > MAX_FEEDBACK_ITEMS) {
+                feedbackStorage.splice(0, feedbackStorage.length - MAX_FEEDBACK_ITEMS);
+            }
+            
+            // Log feedback submission
+            console.log(`📝 Feedback via Socket.IO:`, {
+                type: enhancedFeedbackData.type,
+                rating: enhancedFeedbackData.rating,
+                player: enhancedFeedbackData.playerName,
+                room: enhancedFeedbackData.roomCode,
+                message: enhancedFeedbackData.message.substring(0, 100) + (enhancedFeedbackData.message.length > 100 ? '...' : '')
+            });
+            
+            // Acknowledge success
+            socket.emit('feedbackSubmitted', { 
+                success: true, 
+                message: 'Feedback submitted successfully',
+                id: enhancedFeedbackData.id
+            });
+            
+        } catch (error) {
+            console.error('Error saving feedback via Socket.IO:', error);
+            socket.emit('feedbackError', { message: 'Failed to submit feedback' });
+        }
+    });
+
     // Disconnect handling
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
@@ -421,16 +826,19 @@ function startNewRound(roomCode) {
     room.currentChallenge = getRandomLetters();
     room.roundStartTime = Date.now();
     
-    // Send challenge to all players
+    // Send challenge to all players (display duration is what players see)
     io.to(roomCode).emit('newRound', {
         round: room.currentRound,
         totalRounds: room.totalRounds,
         firstLetter: room.currentChallenge.firstLetter,
         lastLetter: room.currentChallenge.lastLetter,
-        timerDuration: room.timerDuration
+        timerDuration: room.timerDuration  // This is the display time (10, 20, or 30)
     });
     
-    // Auto-advance after timer duration (always runs full time)
+    // Auto-advance after ACTUAL duration (display time + 3 seconds for countdown)
+    // This ensures players get the full time they expect to play
+    const actualDuration = room.timerDuration + 4.35; // Add 3 seconds for countdown
+    
     setTimeout(() => {
         // End round regardless of answers - show summary
         const correctAnswers = Array.from(room.roundAnswers.values()).filter(a => a.correct);
@@ -446,11 +854,17 @@ function startNewRound(roomCode) {
         } else {
             // Show round summary with all correct answers
             io.to(roomCode).emit('roundComplete', {
-                correctAnswers: correctAnswers.map(a => ({
-                    player: a.player.name,
-                    word: a.answer,
-                    points: Math.round((a.remainingTime / 1000) * (1000 / room.timerDuration))
-                }))
+                correctAnswers: correctAnswers.map(a => {
+                    // Calculate base points using the same formula as actual scoring
+                    const basePoints = Math.round(((4350 + a.remainingTime) / 1000) * (1000 / room.timerDuration));
+                    // Apply the multiplier just like in actual scoring
+                    const finalPoints = basePoints * (a.multiplier || 1);
+                    return {
+                        player: a.player.name,
+                        word: a.answer,
+                        points: finalPoints
+                    };
+                })
             });
         }
         
@@ -464,7 +878,7 @@ function startNewRound(roomCode) {
             currentRound: room.currentRound,
             totalRounds: room.totalRounds
         });
-    }, room.timerDuration * 1000);  // Use room's timer duration in milliseconds
+    }, actualDuration * 1000);  // Use actual duration (display time + countdown time)
 }
 
 // Show mid-game summary after round 5
