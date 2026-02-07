@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WordWiz - Speed Battle</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Host Screen (Create Room) -->
+        <div id="hostScreen" class="screen active">
+            <div class="logo-container">
+                <h1 class="game-title">
+                    <span class="word-icon">📚</span>
+                    WordWiz
+                </h1>
+                <p class="tagline">Speed Word Battle!</p>
+            </div>
+            
+            <div class="host-options">
+                <button id="createRoomBtn" class="btn btn-primary btn-large">Create Game Room</button>
+                <div class="divider">OR</div>
+                <button id="joinRoomBtn" class="btn btn-success btn-large">Join Game Room</button>
+            </div>
+        </div>
+
+        <!-- Room Code Screen (Display for Host) -->
+        <div id="roomCodeScreen" class="screen">
+            <div class="room-info">
+                <h2>Game Room Created!</h2>
+                <div class="room-code-display">
+                    <div class="code-label">Room Code:</div>
+                    <div id="displayRoomCode" class="room-code">0000</div>
+                </div>
+                
+                <div class="qr-section">
+                    <p class="qr-label">Scan to Join:</p>
+                    <div id="qrCode" class="qr-code"></div>
+                    <p class="join-url" id="joinUrl">Waiting...</p>
+                </div>
+            </div>
+
+            <div class="waiting-area">
+                <h3>Players in Lobby (<span id="playerCount">0</span>):</h3>
+                <div id="lobbyPlayersList" class="lobby-players"></div>
+            </div>
+
+            <div class="timer-selection">
+                <h3>Timer Duration:</h3>
+                <div class="timer-options">
+                    <button class="timer-btn" data-duration="10">10 Seconds</button>
+                    <button class="timer-btn active" data-duration="30">30 Seconds</button>
+                    <button class="timer-btn" data-duration="20">20 Seconds</button>
+                </div>
+            </div>
+
+            <button id="startGameBtn" class="btn btn-success btn-large" disabled>Start Game (Need 2+ Players)</button>
+        </div>
+
+        <!-- Join Room Screen -->
+        <div id="joinScreen" class="screen">
+            <div class="join-container">
+                <h2>Join Game Room</h2>
+                <div class="code-input-section">
+                    <label>Enter 4-Digit Room Code:</label>
+                    <div class="code-inputs">
+                        <input type="text" class="code-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="text" class="code-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="text" class="code-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="text" class="code-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                    </div>
+                </div>
+
+                <div class="name-input-section">
+                    <label>Your Name:</label>
+                    <input type="text" id="playerNameInput" placeholder="Enter your name" maxlength="20">
+                </div>
+
+                <button id="joinGameBtn" class="btn btn-primary btn-large">Join Game</button>
+                <button id="backToHomeBtn" class="btn btn-secondary">Back</button>
+            </div>
+        </div>
+
+        <!-- Waiting Screen (for joined players) -->
+        <div id="waitingScreen" class="screen">
+            <div class="waiting-container">
+                <div class="spinner"></div>
+                <h2>Waiting for game to start...</h2>
+                <p>You're in room: <span id="currentRoomCode" class="highlight">0000</span></p>
+                <p>Joined as: <span id="currentPlayerName" class="highlight">Player</span></p>
+                
+                <div class="waiting-players">
+                    <h3>Players Ready:</h3>
+                    <div id="waitingPlayersList" class="lobby-players"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Screen (All Players) -->
+        <div id="gameScreen" class="screen">
+            <div class="game-header">
+                <div class="round-info">
+                    <span class="round-label">Round</span>
+                    <span id="currentRound" class="round-number">1</span>
+                    <span class="round-total">/ 10</span>
+                </div>
+                <div class="timer-container">
+                    <svg class="timer-svg" viewBox="0 0 100 100">
+                        <circle class="timer-circle-bg" cx="50" cy="50" r="45"></circle>
+                        <circle id="timerCircle" class="timer-circle" cx="50" cy="50" r="45"></circle>
+                    </svg>
+                    <span id="timerText" class="timer-text">30</span>
+                </div>
+            </div>
+
+            <div class="challenge-container">
+                <div class="challenge-card">
+                    <h2 class="challenge-title">Find ANY Word!</h2>
+                    <div class="letter-display">
+                        <div class="letter-box first-letter">
+                            <span id="firstLetter">?</span>
+                        </div>
+                        <div class="dots">
+                            <span>•</span>
+                            <span>•</span>
+                            <span>•</span>
+                        </div>
+                        <div class="letter-box last-letter">
+                            <span id="lastLetter">?</span>
+                        </div>
+                    </div>
+                    <div class="hint-text">
+                        Type any word that starts with <span id="startLetter" class="letter-highlight">?</span> 
+                        and ends with <span id="endLetter" class="letter-highlight">?</span>
+                    </div>
+                    <div class="speed-notice">⚡ First correct answer wins! ⚡</div>
+                </div>
+
+                <div class="answer-input-group">
+                    <input type="text" id="answerInput" placeholder="Type your word..." autocomplete="off">
+                    <button id="submitAnswerBtn" class="btn btn-primary">Submit</button>
+                </div>
+
+                <div id="feedbackMessage" class="feedback-message"></div>
+                <div id="roundWinner" class="round-winner"></div>
+            </div>
+
+            <div class="scoreboard">
+                <h3>Leaderboard</h3>
+                <div id="scoreboardList" class="scoreboard-list"></div>
+            </div>
+        </div>
+
+        <!-- Mid-Game Summary Screen -->
+        <div id="midGameScreen" class="screen">
+            <div class="midgame-container">
+                <h1 class="midgame-title">🏆 Mid-Game Leaderboard 🏆</h1>
+                <div class="progress-indicator">
+                    <span class="progress-text">Round <span id="midGameRound">5</span> of <span id="midGameTotal">10</span> Complete!</span>
+                </div>
+                
+                <div class="rankings-container">
+                    <div id="midGameRankings" class="midgame-rankings"></div>
+                </div>
+                
+                <div class="continue-message">
+                    <p>🎯 Get ready for the second half!</p>
+                    <div class="countdown-dots">
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- End Screen -->
+        <div id="endScreen" class="screen">
+            <div class="trophy-container">
+                <div class="trophy-icon">🏆</div>
+                <h1 class="end-title">Game Over!</h1>
+            </div>
+
+            <div class="final-scores">
+                <h2>Final Rankings</h2>
+                <div id="finalScoresList" class="final-scores-list"></div>
+            </div>
+
+            <div class="winner-announcement">
+                <h2>🎉 Champion 🎉</h2>
+                <div id="winnerName" class="winner-name"></div>
+            </div>
+
+            <button id="newGameBtn" class="btn btn-success btn-large">New Game</button>
+        </div>
+    </div>
+
+    <audio id="backgroundMusic" loop>
+        <source src="background-music.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- Socket.IO Client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="words.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
