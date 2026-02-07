@@ -23,7 +23,7 @@ A real-time multiplayer vocabulary game where players race to find words! Player
 3. **Host starts game** - Minimum 2 players required
 4. **Race to answer** - All players see the same first/last letters
 5. **Type ANY valid word** - Must start and end with given letters (3+ letters)
-6. **First correct answer wins** - Fastest player gets the points!
+6. **Submit correct answers** - Players earn points for correct answers!
 7. **10 rounds total** - Highest score wins the championship!
 
 ## 📋 Requirements

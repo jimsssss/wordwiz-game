@@ -16,7 +16,7 @@ const GameState = {
     timerInterval: null,
     countdownInterval: null,  // Track countdown interval
     animationFrame: null,     // Track animation frame for smoother timer
-    selectedTimer: 30  // Default 30 seconds
+    selectedTimer: 20  // Default 20 seconds
 };
 
 // Music System - Optimized for better loading and performance
@@ -30,7 +30,8 @@ const Music = {
     countdown30s: ['music/30s-1.mp3', 'music/30s-2.mp3'],
     currentCountdown: null,
     currentBgMusic: null,
-    initialized: false
+    initialized: false,
+    globalVolume: 1.0
 };
 
 // Sound Effects (simple beep sounds)
@@ -132,15 +133,17 @@ function createSilentAudio() {
     };
 }
 
-// Helper function to play music (only for host)
+// Helper function to play music (for ALL players)
 function playMusic(audio, loop = false) {
-    // Only play music/sounds for host, not for clients
-    if (!GameState.isHost) return;
-    
+    // Play music for ALL players without any restrictions
     stopAllMusic();
     if (audio) {
         audio.loop = loop;
         audio.currentTime = 0;
+        // Set appropriate volume based on audio type
+        if (audio === Music.lobby) audio.volume = 0.15;
+        else if (audio === Music.endGame) audio.volume = 0.4;
+        else audio.volume = 0.35;
         audio.play().catch(e => console.log('Music play failed:', e));
         Music.currentBgMusic = audio;
     }
@@ -175,8 +178,7 @@ function stopAllMusic() {
 
 // Background music management - play ambient music when no other music is playing
 function startBackgroundMusic() {
-    // Only for host
-    if (!GameState.isHost) return;
+    // Play for ALL players - mute button controls local volume only
     
     // Don't start if music is already playing
     if (Music.currentBgMusic && !Music.currentBgMusic.paused) return;
@@ -185,7 +187,7 @@ function startBackgroundMusic() {
     // Use lobby music as background
     setTimeout(() => {
         // Double-check no music is playing after delay
-        if (GameState.isHost && (!Music.currentBgMusic || Music.currentBgMusic.paused) && 
+        if ((!Music.currentBgMusic || Music.currentBgMusic.paused) && 
             (!Music.currentCountdown || Music.currentCountdown.paused)) {
             console.log('Starting background music...');
             playMusic(Music.lobby, true);
@@ -211,6 +213,9 @@ document.addEventListener('DOMContentLoaded', () => {
     attachEventListeners();
     setupSocketListeners();
     initializeAudio(); // Initialize audio system
+    
+    // Start background music on homepage
+    startHomepageMusic();
 });
 
 // Initialize all DOM elements
@@ -278,6 +283,12 @@ function attachEventListeners() {
     joinRoomBtn.addEventListener('click', () => switchScreen(joinScreen));
     backToHomeBtn.addEventListener('click', () => switchScreen(hostScreen));
     
+    // Mechanics button
+    const mechanicsBtn = document.getElementById('mechanicsBtn');
+    if (mechanicsBtn) {
+        mechanicsBtn.addEventListener('click', openMechanicsModal);
+    }
+    
     // Timer selection buttons
     document.querySelectorAll('.timer-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -287,10 +298,14 @@ function attachEventListeners() {
         });
     });
     
-    // Auto-focus next digit input
+    // Auto-focus next letter input
     codeDigitInputs.forEach((input, index) => {
         input.addEventListener('input', (e) => {
-            if (e.target.value.length === 1 && index < codeDigitInputs.length - 1) {
+            // Convert to uppercase and allow only letters
+            const value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
+            e.target.value = value;
+            
+            if (value.length === 1 && index < codeDigitInputs.length - 1) {
                 codeDigitInputs[index + 1].focus();
             }
         });
@@ -352,6 +367,9 @@ function setupSocketListeners() {
         GameState.players = players;
         updatePlayersList(players);
         
+        // Also update waiting players list for non-host players
+        updateWaitingPlayersList(players);
+        
         playerCount.textContent = players.length;
         startGameBtn.disabled = players.length < 2;
         startGameBtn.textContent = players.length < 2 ? 
@@ -403,71 +421,10 @@ function setupSocketListeners() {
         }
     });
     
-    // New round with countdown (always 3 seconds for all rounds)
+    // New round with 3-second countdown
     socket.on('newRound', ({ round, totalRounds, firstLetter, lastLetter, timerDuration }) => {
-        GameState.currentRound = round;
-        GameState.currentChallenge = { firstLetter, lastLetter };
-        
-        // Clear ALL existing timers first to prevent overlaps
-        if (GameState.timerInterval) {
-            clearInterval(GameState.timerInterval);
-            GameState.timerInterval = null;
-        }
-        if (GameState.countdownInterval) {
-            clearInterval(GameState.countdownInterval);
-            GameState.countdownInterval = null;
-        }
-        if (GameState.animationFrame) {
-            cancelAnimationFrame(GameState.animationFrame);
-            GameState.animationFrame = null;
-        }
-        
-        // Store the timer duration for this round
-        GameState.selectedTimer = timerDuration;
-        
-        currentRoundEl.textContent = round;
-        firstLetterEl.textContent = '?';
-        lastLetterEl.textContent = '?';
-        startLetter.textContent = '?';
-        endLetter.textContent = '?';
-        
-        // Clear completed players display for new round (host only)
-        if (GameState.isHost) {
-            clearCompletedPlayersDisplay();
-        }
-        
-        // Hide input area for host, show for clients
-        const answerInputGroup = document.querySelector('.answer-input-group');
-        if (GameState.isHost) {
-            answerInputGroup.style.display = 'none';
-        } else {
-            answerInputGroup.style.display = 'flex';
-            // Clear input value but keep it enabled and focused
-            answerInput.value = '';
-            answerInput.disabled = false;  // Keep enabled throughout
-            submitAnswerBtn.disabled = true;  // Only disable submit until countdown ends
-        }
-        
-        feedbackMessage.textContent = '';
-        feedbackMessage.className = 'feedback-message';
-        roundWinner.textContent = '';
-        
-        // No countdown - start immediately
-        
-        // Reveal letters and start game immediately
-        firstLetterEl.textContent = firstLetter;
-        lastLetterEl.textContent = lastLetter;
-        startLetter.textContent = firstLetter;
-        endLetter.textContent = lastLetter;
-        
-        // Enable submit button immediately for clients
-        if (!GameState.isHost) {
-            submitAnswerBtn.disabled = false;
-            answerInput.focus();
-        }
-        
-        // Start the main timer immediately
-        startTimer(timerDuration);
+        // Use the new countdown function
+        startRoundWithCountdown(round, totalRounds, firstLetter, lastLetter, timerDuration);
     });
     
     // Check word validity
@@ -563,8 +520,8 @@ function setupSocketListeners() {
         answerInput.disabled = true;
         submitAnswerBtn.disabled = true;
         
-        // Play timeout sound (only for host)
-        if (GameState.isHost) {
+        // Play timeout sound for ALL players
+        if (Sounds.incorrect) {
             Sounds.incorrect.play().catch(() => {});
         }
         
@@ -678,7 +635,7 @@ function joinRoom() {
     const playerName = playerNameInput.value.trim();
     
     if (roomCode.length !== 4) {
-        alert('Please enter a 4-digit room code');
+        alert('Please enter a 4-letter room code');
         return;
     }
     
@@ -736,15 +693,14 @@ function startTimer(duration) {
     const circumference = 283;
     timerCircle.style.strokeDashoffset = 0;
     
-    // Play random countdown music for this round (only for host)
-    if (GameState.isHost) {
-        // Stop all existing music first to prevent overlap
-        stopAllMusic();
-        
-        Music.currentCountdown = getRandomCountdownMusic(duration);
-        Music.currentCountdown.currentTime = 0;
-        Music.currentCountdown.play().catch(e => console.log('Countdown music failed:', e));
-    }
+    // Play random countdown music for this round (for ALL players)
+    // Stop all existing music first to prevent overlap
+    stopAllMusic();
+    
+    Music.currentCountdown = getRandomCountdownMusic(duration);
+    Music.currentCountdown.currentTime = 0;
+    Music.currentCountdown.volume = 0.35;
+    Music.currentCountdown.play().catch(e => console.log('Countdown music failed:', e));
     
     // Use a more reliable timer approach with high precision
     const startTime = performance.now();
@@ -1090,3 +1046,675 @@ window.addEventListener('load', () => {
         playerNameInput.focus();
     }
 });
+
+// ========================================
+// FEEDBACK SYSTEM
+// ========================================
+
+// Feedback system state
+const FeedbackState = {
+    currentRating: 0,
+    currentType: 'suggestion',
+    isSubmitting: false
+};
+
+// Initialize feedback system when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    initializeFeedbackSystem();
+});
+
+function initializeFeedbackSystem() {
+    // Get feedback elements
+    const feedbackBtn = document.getElementById('feedbackBtn');
+    const feedbackModal = document.getElementById('feedbackModal');
+    const feedbackSuccess = document.getElementById('feedbackSuccess');
+    const closeFeedbackBtn = document.getElementById('closeFeedbackBtn');
+    const cancelFeedbackBtn = document.getElementById('cancelFeedbackBtn');
+    const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+    
+    // Get form elements
+    const feedbackTypeButtons = document.querySelectorAll('.feedback-type-btn');
+    const stars = document.querySelectorAll('.star');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackEmail = document.getElementById('feedbackEmail');
+    
+    if (!feedbackBtn) return; // Exit if feedback system not available
+    
+    // Event Listeners
+    feedbackBtn.addEventListener('click', openFeedbackModal);
+    closeFeedbackBtn.addEventListener('click', closeFeedbackModal);
+    cancelFeedbackBtn.addEventListener('click', closeFeedbackModal);
+    submitFeedbackBtn.addEventListener('click', submitFeedback);
+    
+    // Close modal when clicking outside
+    feedbackModal.addEventListener('click', (e) => {
+        if (e.target === feedbackModal) {
+            closeFeedbackModal();
+        }
+    });
+    
+    // Close with Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && feedbackModal.classList.contains('active')) {
+            closeFeedbackModal();
+        }
+    });
+    
+    // Feedback type selection
+    feedbackTypeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            feedbackTypeButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            FeedbackState.currentType = btn.dataset.type;
+        });
+    });
+    
+    // Star rating system
+    stars.forEach((star, index) => {
+        const rating = index + 1;
+        
+        star.addEventListener('click', () => {
+            FeedbackState.currentRating = rating;
+            updateStarDisplay(rating);
+        });
+        
+        star.addEventListener('mouseenter', () => {
+            if (!FeedbackState.isSubmitting) {
+                updateStarDisplay(rating);
+            }
+        });
+    });
+    
+    // Reset stars on mouse leave
+    const starRating = document.querySelector('.star-rating');
+    if (starRating) {
+        starRating.addEventListener('mouseleave', () => {
+            if (!FeedbackState.isSubmitting) {
+                updateStarDisplay(FeedbackState.currentRating);
+            }
+        });
+    }
+    
+    // Auto-resize textarea
+    if (feedbackText) {
+        feedbackText.addEventListener('input', () => {
+            autoResizeTextarea(feedbackText);
+        });
+    }
+    
+    // Enable/disable submit button based on content
+    if (feedbackText) {
+        feedbackText.addEventListener('input', validateFeedbackForm);
+    }
+}
+
+function openFeedbackModal() {
+    const feedbackModal = document.getElementById('feedbackModal');
+    if (feedbackModal) {
+        feedbackModal.classList.add('active');
+        
+        // Focus on the textarea
+        const feedbackText = document.getElementById('feedbackText');
+        if (feedbackText) {
+            setTimeout(() => {
+                feedbackText.focus();
+            }, 300); // Small delay for animation
+        }
+        
+        // Reset form
+        resetFeedbackForm();
+    }
+}
+
+function closeFeedbackModal() {
+    const feedbackModal = document.getElementById('feedbackModal');
+    if (feedbackModal) {
+        feedbackModal.classList.remove('active');
+    }
+}
+
+function resetFeedbackForm() {
+    // Reset type to suggestion
+    const feedbackTypeButtons = document.querySelectorAll('.feedback-type-btn');
+    feedbackTypeButtons.forEach(btn => btn.classList.remove('active'));
+    const suggestionBtn = document.querySelector('[data-type="suggestion"]');
+    if (suggestionBtn) suggestionBtn.classList.add('active');
+    FeedbackState.currentType = 'suggestion';
+    
+    // Reset rating
+    FeedbackState.currentRating = 0;
+    updateStarDisplay(0);
+    
+    // Clear text
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackEmail = document.getElementById('feedbackEmail');
+    if (feedbackText) feedbackText.value = '';
+    if (feedbackEmail) feedbackEmail.value = '';
+    
+    // Reset submit button
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Send Feedback';
+    }
+    
+    FeedbackState.isSubmitting = false;
+}
+
+function updateStarDisplay(rating) {
+    const stars = document.querySelectorAll('.star');
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.classList.add('active');
+        } else {
+            star.classList.remove('active');
+        }
+    });
+}
+
+function validateFeedbackForm() {
+    const feedbackText = document.getElementById('feedbackText');
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    
+    if (feedbackText && submitBtn) {
+        const hasText = feedbackText.value.trim().length > 0;
+        submitBtn.disabled = !hasText || FeedbackState.isSubmitting;
+    }
+}
+
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = textarea.scrollHeight + 'px';
+}
+
+async function submitFeedback() {
+    if (FeedbackState.isSubmitting) return;
+    
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackEmail = document.getElementById('feedbackEmail');
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    
+    if (!feedbackText || !feedbackText.value.trim()) {
+        alert('Please enter your feedback message.');
+        return;
+    }
+    
+    // Prepare feedback data
+    const feedbackData = {
+        type: FeedbackState.currentType,
+        rating: FeedbackState.currentRating,
+        message: feedbackText.value.trim(),
+        email: feedbackEmail ? feedbackEmail.value.trim() : '',
+        timestamp: new Date().toISOString(),
+        roomCode: GameState.roomCode || 'none',
+        playerName: GameState.playerName || 'anonymous',
+        isHost: GameState.isHost || false,
+        userAgent: navigator.userAgent,
+        url: window.location.href
+    };
+    
+    // Update UI to show submitting state
+    FeedbackState.isSubmitting = true;
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending...';
+    }
+    
+    try {
+        // Send feedback to server
+        const response = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(feedbackData)
+        });
+        
+        if (response.ok) {
+            // Show success message
+            showFeedbackSuccess();
+            closeFeedbackModal();
+        } else {
+            throw new Error(`Server error: ${response.status}`);
+        }
+    } catch (error) {
+        console.error('Failed to submit feedback:', error);
+        
+        // Fallback: try to send via Socket.IO if available
+        if (typeof socket !== 'undefined' && socket.connected) {
+            try {
+                socket.emit('submitFeedback', feedbackData);
+                showFeedbackSuccess();
+                closeFeedbackModal();
+            } catch (socketError) {
+                console.error('Socket.IO feedback submission failed:', socketError);
+                showFeedbackError();
+            }
+        } else {
+            showFeedbackError();
+        }
+    } finally {
+        // Reset submitting state
+        FeedbackState.isSubmitting = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send Feedback';
+        }
+    }
+}
+
+function showFeedbackSuccess() {
+    const feedbackSuccess = document.getElementById('feedbackSuccess');
+    if (feedbackSuccess) {
+        feedbackSuccess.classList.add('active');
+        
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            feedbackSuccess.classList.remove('active');
+        }, 3000);
+    }
+}
+
+function showFeedbackError() {
+    alert('Failed to send feedback. Please try again later or contact support directly.');
+}
+
+// Add feedback button pulse animation periodically
+function startFeedbackButtonAnimation() {
+    const feedbackBtn = document.getElementById('feedbackBtn');
+    if (!feedbackBtn) return;
+    
+    // Add subtle pulse animation every 30 seconds
+    setInterval(() => {
+        feedbackBtn.style.animation = 'pulse 2s ease-in-out';
+        setTimeout(() => {
+            feedbackBtn.style.animation = '';
+        }, 2000);
+    }, 30000);
+}
+
+// Add CSS for pulse animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+`;
+document.head.appendChild(style);
+
+// Start feedback button animation
+setTimeout(startFeedbackButtonAnimation, 10000); // Start after 10 seconds
+
+// ========================================
+// GAME MECHANICS MODAL
+// ========================================
+
+function openMechanicsModal() {
+    const mechanicsModal = document.getElementById('mechanicsModal');
+    if (mechanicsModal) {
+        mechanicsModal.classList.add('active');
+    }
+}
+
+function closeMechanicsModal() {
+    const mechanicsModal = document.getElementById('mechanicsModal');
+    if (mechanicsModal) {
+        mechanicsModal.classList.remove('active');
+    }
+}
+
+// Initialize mechanics modal when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    initializeMechanicsModal();
+});
+
+function initializeMechanicsModal() {
+    const closeMechanicsBtn = document.getElementById('closeMechanicsBtn');
+    const gotItBtn = document.getElementById('gotItBtn');
+    const mechanicsModal = document.getElementById('mechanicsModal');
+    
+    if (!mechanicsModal) return; // Exit if modal not available
+    
+    // Event Listeners
+    if (closeMechanicsBtn) {
+        closeMechanicsBtn.addEventListener('click', closeMechanicsModal);
+    }
+    
+    if (gotItBtn) {
+        gotItBtn.addEventListener('click', closeMechanicsModal);
+    }
+    
+    // Close modal when clicking outside
+    mechanicsModal.addEventListener('click', (e) => {
+        if (e.target === mechanicsModal) {
+            closeMechanicsModal();
+        }
+    });
+    
+    // Close with Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && mechanicsModal.classList.contains('active')) {
+            closeMechanicsModal();
+        }
+    });
+}
+
+// ========================================
+// HOMEPAGE BACKGROUND MUSIC
+// ========================================
+
+function startHomepageMusic() {
+    // Wait a bit to ensure audio is initialized
+    setTimeout(() => {
+        // Only start if we're on the homepage and no room has been created
+        if (hostScreen && hostScreen.classList.contains('active') && !GameState.roomCode) {
+            console.log('Starting homepage background music...');
+            try {
+                // Use a soft ambient version of lobby music for homepage
+                if (Music.lobby && Music.initialized) {
+                    Music.lobby.volume = 0.15; // Lower volume for homepage
+                    Music.lobby.loop = true;
+                    Music.lobby.play().catch(e => {
+                        console.log('Homepage music autoplay blocked:', e);
+                        // Add a subtle hint for user interaction to enable audio
+                        addAudioInteractionHint();
+                    });
+                    Music.currentBgMusic = Music.lobby;
+                }
+            } catch (error) {
+                console.warn('Homepage music failed to start:', error);
+            }
+        }
+    }, 1000);
+}
+
+function addAudioInteractionHint() {
+    // Check if hint already exists
+    if (document.getElementById('audioHint')) return;
+    
+    const hint = document.createElement('div');
+    hint.id = 'audioHint';
+    hint.innerHTML = '🎵 Click anywhere to enable audio';
+    hint.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(102, 126, 234, 0.9);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 25px;
+        font-size: 14px;
+        font-weight: 600;
+        z-index: 1000;
+        animation: fadeInOut 3s ease-in-out;
+        pointer-events: none;
+    `;
+    
+    // Add fade animation
+    const hintStyle = document.createElement('style');
+    hintStyle.textContent = `
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            20%, 80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+    `;
+    document.head.appendChild(hintStyle);
+    
+    document.body.appendChild(hint);
+    
+    // Remove hint after animation
+    setTimeout(() => {
+        if (hint.parentNode) {
+            hint.parentNode.removeChild(hint);
+        }
+        if (hintStyle.parentNode) {
+            hintStyle.parentNode.removeChild(hintStyle);
+        }
+    }, 3000);
+    
+    // Enable audio on first user interaction
+    function enableAudio() {
+        if (Music.lobby && hostScreen.classList.contains('active')) {
+            Music.lobby.volume = 0.15;
+            Music.lobby.play().catch(() => {});
+            Music.currentBgMusic = Music.lobby;
+        }
+        
+        // Remove the hint immediately on interaction
+        if (hint.parentNode) {
+            hint.parentNode.removeChild(hint);
+        }
+        
+        // Remove listeners
+        document.removeEventListener('click', enableAudio);
+        document.removeEventListener('keydown', enableAudio);
+        document.removeEventListener('touchstart', enableAudio);
+    }
+    
+    // Listen for any user interaction
+    document.addEventListener('click', enableAudio);
+    document.addEventListener('keydown', enableAudio);
+    document.addEventListener('touchstart', enableAudio);
+}
+
+
+// ========================================
+// 3-SECOND COUNTDOWN BEFORE ROUNDS
+// ========================================
+
+// Updated newRound socket listener to include 3-second countdown
+function startRoundWithCountdown(round, totalRounds, firstLetter, lastLetter, timerDuration) {
+    GameState.currentRound = round;
+    GameState.currentChallenge = { firstLetter, lastLetter };
+    
+    // Clear ALL existing timers first to prevent overlaps
+    if (GameState.timerInterval) {
+        clearInterval(GameState.timerInterval);
+        GameState.timerInterval = null;
+    }
+    if (GameState.countdownInterval) {
+        clearInterval(GameState.countdownInterval);
+        GameState.countdownInterval = null;
+    }
+    if (GameState.animationFrame) {
+        cancelAnimationFrame(GameState.animationFrame);
+        GameState.animationInterval = null;
+    }
+    
+    // Store the DISPLAY timer duration (what players see)
+    GameState.selectedTimer = timerDuration;
+    
+    currentRoundEl.textContent = round;
+    firstLetterEl.textContent = '?';
+    lastLetterEl.textContent = '?';
+    startLetter.textContent = '?';
+    endLetter.textContent = '?';
+    
+    // Clear completed players display for new round (host only)
+    if (GameState.isHost) {
+        clearCompletedPlayersDisplay();
+    }
+    
+    // Hide input area for all players during countdown
+    const answerInputGroup = document.querySelector('.answer-input-group');
+    answerInputGroup.style.display = 'none';
+    
+    feedbackMessage.textContent = '';
+    feedbackMessage.className = 'feedback-message';
+    roundWinner.textContent = '';
+    
+    // Start 3-second countdown
+    showRoundCountdown(() => {
+        // After countdown, reveal letters and start the actual round
+        firstLetterEl.textContent = firstLetter;
+        lastLetterEl.textContent = lastLetter;
+        startLetter.textContent = firstLetter;
+        endLetter.textContent = lastLetter;
+        
+        // Show input area for clients only
+        if (!GameState.isHost) {
+            answerInputGroup.style.display = 'flex';
+            answerInput.value = '';
+            answerInput.disabled = false;
+            submitAnswerBtn.disabled = false;
+            answerInput.focus();
+        }
+        
+        // Start the main timer with the FULL duration (so players get the full time they expect)
+        // The countdown doesn't eat into their game time
+        startTimer(timerDuration);
+    });
+}
+
+function showRoundCountdown(onComplete) {
+    let countdown = 3;
+    
+    // Clear any existing countdown interval first
+    if (GameState.countdownInterval) {
+        clearInterval(GameState.countdownInterval);
+        GameState.countdownInterval = null;
+    }
+    
+    // Play countdown start sound for ALL players - ensure audio is initialized
+    if (Music.initialized && Music.countdownStart3s) {
+        try {
+            Music.countdownStart3s.currentTime = 0;
+            Music.countdownStart3s.volume = 0.4;
+            Music.countdownStart3s.play().catch(e => {
+                console.log('Countdown start music failed:', e);
+            });
+            console.log('Playing 3-second countdown music');
+        } catch (error) {
+            console.log('Error playing countdown start music:', error);
+        }
+    } else {
+        console.log('Music not initialized or countdownStart3s not available');
+    }
+    
+    // Show countdown overlay
+    const countdownOverlay = document.createElement('div');
+    countdownOverlay.id = 'countdownOverlay';
+    countdownOverlay.innerHTML = `
+        <div class="countdown-content">
+            <div class="countdown-number">${countdown}</div>
+            <div class="countdown-text">Get Ready!</div>
+        </div>
+    `;
+    countdownOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(102, 126, 234, 0.95);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 3000;
+        font-family: 'Poppins', sans-serif;
+    `;
+    
+    // Add countdown styles
+    const countdownStyle = document.createElement('style');
+    countdownStyle.id = 'countdownStyle';
+    countdownStyle.textContent = `
+        .countdown-content {
+            text-align: center;
+            animation: countdownBounce 0.5s ease-out;
+        }
+        
+        .countdown-number {
+            font-size: 8rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            animation: countdownPulse 1s ease-in-out;
+        }
+        
+        .countdown-text {
+            font-size: 2rem;
+            font-weight: 600;
+            opacity: 0.9;
+        }
+        
+        @keyframes countdownBounce {
+            0% { opacity: 0; transform: scale(0.3); }
+            50% { transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        @keyframes countdownPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        
+        @media (max-width: 768px) {
+            .countdown-number {
+                font-size: 5rem;
+            }
+            .countdown-text {
+                font-size: 1.5rem;
+            }
+        }
+    `;
+    document.head.appendChild(countdownStyle);
+    document.body.appendChild(countdownOverlay);
+    
+    // Store countdown interval in GameState for proper cleanup
+    GameState.countdownInterval = setInterval(() => {
+        countdown--;
+        
+        if (countdown > 0) {
+            // Update countdown display
+            const countdownNumber = countdownOverlay.querySelector('.countdown-number');
+            if (countdownNumber) {
+                countdownNumber.textContent = countdown;
+                
+                // Restart animation
+                countdownNumber.style.animation = 'none';
+                countdownNumber.offsetHeight; // Trigger reflow
+                countdownNumber.style.animation = 'countdownPulse 1s ease-in-out';
+            }
+            
+            // Play tick sound for ALL players - ensure sound is available
+            if (Music.initialized && Sounds.tick) {
+                try {
+                    Sounds.tick.play().catch(e => {
+                        console.log('Tick sound failed:', e);
+                    });
+                } catch (error) {
+                    console.log('Error playing tick sound:', error);
+                }
+            }
+        } else {
+            // Countdown finished
+            clearInterval(GameState.countdownInterval);
+            GameState.countdownInterval = null;
+            
+            // Show "GO!" for a brief moment
+            const countdownNumber = countdownOverlay.querySelector('.countdown-number');
+            const countdownText = countdownOverlay.querySelector('.countdown-text');
+            if (countdownNumber && countdownText) {
+                countdownNumber.textContent = 'GO!';
+                countdownText.textContent = 'Find the word!';
+                countdownNumber.style.color = '#28a745';
+            }
+            
+            setTimeout(() => {
+                // Remove countdown overlay
+                if (countdownOverlay.parentNode) {
+                    countdownOverlay.parentNode.removeChild(countdownOverlay);
+                }
+                if (countdownStyle.parentNode) {
+                    countdownStyle.parentNode.removeChild(countdownStyle);
+                }
+                
+                // Start the actual round
+                onComplete();
+            }, 800);
+        }
+    }, 1000);
+}

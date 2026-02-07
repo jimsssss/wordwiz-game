@@ -279,10 +279,10 @@ body {
 
 .room-code {
     font-size: 4rem;
-    font-weight: 800;
+    font-weight: 900;
     color: white;
     letter-spacing: 15px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Arial Black', Arial, sans-serif;
 }
 
 .qr-section {
@@ -379,12 +379,13 @@ body {
     width: 70px;
     height: 80px;
     font-size: 2.5rem;
-    font-weight: 700;
+    font-weight: 900;
     text-align: center;
     border: 3px solid #667eea;
     border-radius: 15px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Arial Black', Arial, sans-serif;
     transition: all 0.3s ease;
+    text-transform: uppercase;
 }
 
 .code-digit:focus {
@@ -425,6 +426,17 @@ body {
     background: #6c757d;
     color: white;
     margin-top: 15px;
+}
+
+.btn-info {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    color: white;
+}
+
+.btn-mechanics {
+    margin-top: 20px;
+    padding: 15px 30px;
+    font-size: 1.1rem;
 }
 
 /* Waiting Screen */
@@ -1203,5 +1215,604 @@ body {
     
     .timer-text {
         font-size: 1.5rem;
+    }
+}
+
+/* Feedback System Styles */
+.feedback-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    border: none;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 1.8rem;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.feedback-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+}
+
+.feedback-btn:active {
+    transform: scale(1.05);
+}
+
+
+/* Feedback Modal */
+.feedback-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    animation: fadeIn 0.3s ease;
+}
+
+.feedback-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.feedback-modal-content {
+    background: white;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideInScale 0.3s ease;
+}
+
+@keyframes slideInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.8) translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.feedback-modal-header {
+    padding: 25px 30px 15px;
+    border-bottom: 2px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.feedback-modal-header h3 {
+    font-size: 1.8rem;
+    color: #333;
+    font-weight: 700;
+    margin: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.3s ease;
+}
+
+.close-btn:hover {
+    color: #667eea;
+}
+
+.feedback-modal-body {
+    padding: 25px 30px;
+}
+
+.feedback-modal-body > p {
+    color: #666;
+    font-size: 1.1rem;
+    margin-bottom: 25px;
+    line-height: 1.5;
+}
+
+.feedback-form {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.feedback-type label,
+.feedback-rating label,
+.feedback-message label,
+.feedback-contact label {
+    display: block;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.feedback-type-options {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.feedback-type-btn {
+    padding: 10px 15px;
+    border: 2px solid #667eea;
+    background: white;
+    color: #667eea;
+    border-radius: 25px;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.feedback-type-btn:hover {
+    background: #f8f9ff;
+}
+
+.feedback-type-btn.active {
+    background: #667eea;
+    color: white;
+}
+
+.star-rating {
+    display: flex;
+    gap: 5px;
+    font-size: 1.8rem;
+}
+
+.star {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0.3;
+}
+
+.star:hover {
+    transform: scale(1.2);
+}
+
+.star.active {
+    opacity: 1;
+    animation: starGlow 0.3s ease;
+}
+
+@keyframes starGlow {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+#feedbackText {
+    width: 100%;
+    min-height: 120px;
+    padding: 15px 20px;
+    border: 2px solid #667eea;
+    border-radius: 12px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 1rem;
+    resize: vertical;
+    transition: all 0.3s ease;
+}
+
+#feedbackText:focus {
+    outline: none;
+    border-color: #764ba2;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+}
+
+#feedbackEmail {
+    width: 100%;
+    padding: 12px 20px;
+    border: 2px solid #667eea;
+    border-radius: 12px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+#feedbackEmail:focus {
+    outline: none;
+    border-color: #764ba2;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+}
+
+.feedback-modal-footer {
+    padding: 20px 30px 30px;
+    display: flex;
+    gap: 15px;
+    justify-content: flex-end;
+}
+
+.feedback-modal-footer .btn {
+    padding: 12px 25px;
+    font-size: 1rem;
+}
+
+/* Feedback Success Message */
+.feedback-success {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2100;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.feedback-success.active {
+    display: flex;
+}
+
+.success-content {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: bounceIn 0.5s ease;
+}
+
+@keyframes bounceIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.success-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+
+.success-content h3 {
+    font-size: 2rem;
+    color: #333;
+    margin-bottom: 15px;
+    font-weight: 700;
+}
+
+.success-content p {
+    color: #666;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+/* Mobile adjustments for feedback */
+@media (max-width: 768px) {
+    .feedback-btn {
+        bottom: 15px;
+        right: 15px;
+        width: 55px;
+        height: 55px;
+        font-size: 1.6rem;
+    }
+    
+    .feedback-modal-content {
+        margin: 10px;
+        max-width: calc(100% - 20px);
+    }
+    
+    .feedback-modal-header,
+    .feedback-modal-body,
+    .feedback-modal-footer {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+    
+    .feedback-type-options {
+        gap: 8px;
+    }
+    
+    .feedback-type-btn {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+    }
+    
+    .feedback-modal-footer {
+        flex-direction: column;
+    }
+    
+    .feedback-modal-footer .btn {
+        width: 100%;
+    }
+    
+    .success-content {
+        margin: 20px;
+        padding: 30px 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .feedback-modal-header h3 {
+        font-size: 1.5rem;
+    }
+    
+    .feedback-type-options {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .feedback-type-btn {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .star-rating {
+        justify-content: center;
+        font-size: 2rem;
+    }
+}
+
+/* Game Mechanics Modal Styles */
+.mechanics-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    animation: fadeIn 0.3s ease;
+}
+
+.mechanics-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.mechanics-modal-content {
+    background: white;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideInScale 0.3s ease;
+}
+
+.mechanics-modal-header {
+    padding: 30px 30px 20px;
+    border-bottom: 2px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 20px 20px 0 0;
+}
+
+.mechanics-modal-header h2 {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0;
+    color: white;
+}
+
+.mechanics-modal-body {
+    padding: 30px;
+}
+
+.mechanics-section {
+    margin-bottom: 30px;
+}
+
+.mechanics-section h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mechanics-section p {
+    color: #666;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin-bottom: 15px;
+}
+
+.mechanics-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.step {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 15px;
+    background: #f8f9ff;
+    border-radius: 12px;
+    border-left: 4px solid #667eea;
+}
+
+.step-number {
+    background: #667eea;
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.step-content {
+    flex: 1;
+    font-size: 1rem;
+    color: #333;
+    line-height: 1.5;
+}
+
+.scoring-info {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.score-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 15px;
+    background: #f0f8ff;
+    border-radius: 12px;
+    border-left: 4px solid #17a2b8;
+}
+
+.score-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.examples {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.example-item {
+    padding: 15px;
+    background: #f8fff0;
+    border-radius: 12px;
+    border-left: 4px solid #28a745;
+}
+
+.example-challenge {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.example-answers {
+    font-size: 0.95rem;
+    color: #666;
+    font-style: italic;
+}
+
+.tips {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tip {
+    padding: 12px 15px;
+    background: #fff3cd;
+    border-radius: 8px;
+    border-left: 4px solid #ffc107;
+    font-size: 1rem;
+    color: #333;
+    line-height: 1.4;
+}
+
+.mechanics-modal-footer {
+    padding: 20px 30px 30px;
+    display: flex;
+    justify-content: center;
+}
+
+.mechanics-modal-footer .btn {
+    padding: 15px 40px;
+    font-size: 1.2rem;
+}
+
+/* Mobile adjustments for mechanics modal */
+@media (max-width: 768px) {
+    .mechanics-modal-content {
+        margin: 10px;
+        max-width: calc(100% - 20px);
+        max-height: 95vh;
+    }
+    
+    .mechanics-modal-header,
+    .mechanics-modal-body,
+    .mechanics-modal-footer {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+    
+    .mechanics-modal-header h2 {
+        font-size: 1.6rem;
+    }
+    
+    .step {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .score-item {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .scoring-info,
+    .examples {
+        gap: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .mechanics-modal-header h2 {
+        font-size: 1.4rem;
+    }
+    
+    .mechanics-section h3 {
+        font-size: 1.3rem;
+    }
+    
+    .step-content,
+    .mechanics-section p {
+        font-size: 0.95rem;
     }
 }
